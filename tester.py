@@ -17,6 +17,7 @@ def test_files(input_file_num, output_file_num):
     res, expected = "", ""
     with open(output_file_name, 'r') as f:
         res = f.read().replace("\r", "")
+            
     with open("output.txt", 'r') as f:
         expected = f.read()
     
