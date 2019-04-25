@@ -41,6 +41,8 @@ class State(object):
             
     def move_state(self, action: Tuple[str, np.array]):
         new_pos = self.pos + action[1]
+        # print(self.pos, new_pos)
+
         if new_pos[0] < 0:
             new_pos[0] = 0
         if new_pos[1] < 0:
@@ -56,7 +58,6 @@ class State(object):
 
     def reset(self):
         self.prev_value = self.value
-        self.value = 0
 
     def delta(self):
         return abs(self.value - self.prev_value)
@@ -67,7 +68,7 @@ class Environment(object):
                 correct_action_prob: float=.7, 
                 incorrect_action_prob: float=.1, 
                 action_cost: float=-1.,
-                actions=[("east", np.array([0,1])), ("west", np.array([0,-1])), ("north",np.array([-1,0])), ("south",np.array([0,1])) ]):
+                actions=[("east", np.array([0,1])), ("west", np.array([0,-1])), ("north",np.array([-1,0])), ("south",np.array([1,0])) ]):
         # will be overwritten
         self.grid_size: int
         self.num_obstacles: int
@@ -105,6 +106,7 @@ class Environment(object):
             self.grid[o[0]][o[1]].reward += -100
         
         self.grid[self.destination[0]][self.destination[1]].reward += 100
+        self.print_reward()
 
     def average_change(self) -> float:
         all_delta = [ s.delta() for s in chain.from_iterable(self.grid) ]
@@ -127,12 +129,18 @@ class Environment(object):
         for r in self.grid:
             for c in r:
                 c.reset()
+
+    def print_reward(self):
+        strung = [ [r.reward for r in c] for c in self.grid]
+        np_array = np.array(strung).T
+
+        return print(np_array)
     
     # its okay to cast and print because uncommon operation used for debugging
     def __str__(self) -> str:
         # for pretty printing
         # coord tuples are (col, row) so take transpose
-        strung = [ [str(r) for r in c] for c in self.grid]
+        strung = [ [r.value for r in c] for c in self.grid]
         np_array = np.array(strung).T
 
         return str(np_array)
@@ -172,8 +180,10 @@ class ValueIterationPolicy(object):
             # print(self.environment)
             if self.environment.average_change() <= self.epsilon:
                 print("Converged early in {} iterations".format(i))
-                return
+                break
             self.environment.reset()
+        
+        print(self.environment)
 
 
     def policy_extract(self):
