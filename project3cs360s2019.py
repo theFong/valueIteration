@@ -4,16 +4,80 @@ List,
 Tuple)
 import numpy as np
 from enum import Enum
+from itertools import chain
+
+class State(object):
+
+    class Action(Enum):
+        EAST = np.array([0,1])
+        WEST = np.array([0,-1])
+        NORTH = np.array([-1,0])
+        SOUTH = np.array([0,1])
+
+    def __init__(self, col, row, grid, 
+                reward: float=0., 
+                correct_action_prob: float=.7, 
+                incorrect_action_prob: float=.1):
+        self.reward: float = reward
+        self.prev_value: float
+        self.value: int
+        self.pos = np.array([col, row])
+        self.grid = grid
+        self.correct_action_prob = correct_action_prob
+        self.incorrect_action_prob = incorrect_action_prob
+    
+    def __iter__(self):
+        def generator():
+            for a in self.Action:
+                yield self.move(a)
+
+        return generator()
+
+    def move(action: Action):
+        # returns move with each (transition prob, reward, future value)
+        params = []
+        for a in Action:
+            prob = .1
+            if a == action:
+                prob = .7
+            state_prime = self.move_state(a)
+            params.append((prob, state_prime.reward, state_prime.prev_value))
+        return params
+            
+    def move_state(action: Action):
+        new_pos = self.pos + action.value
+        if new_pos[0] < 0:
+            new_pos[0] = 0
+        if new_pos[1] < 0:
+            new_pos[1] = 0
+        if new_pos[0] >= len(self.grid):
+            new_pos[0] = len(self.grid) - 1
+        if new_pos[1] >= len(self.grid[0]):
+            new_pos[1] = len(self.grid) - 1
+        return self.grid[new_pos[0]][new_pos[1]]
+
+    def __str__(self):
+        return "{},{}".format(self.value, self.prev_value)
+
+    def reset(self):
+        self.prev_value = self.value
+        self.value = 0
 
 class Environment(object):
 
-    def __init__(self, file_name: str):
+    def __init__(self, file_name: str, 
+                correct_action_prob: float=.7, 
+                incorrect_action_prob: float=.1, 
+                action_cost: float=-1.):
         # will be overwritten
-        self.grid_size: int = 0
-        self.num_obstacles: int = 0
-        self.obstacles: List[Tuple[int,int]] = []
-        self.destination: Tuple[int,int] = (0,0)
-        self.grid: List[List[int]] = []
+        self.grid_size: int
+        self.num_obstacles: int
+        self.obstacles: List[Tuple[int,int]]
+        self.destination: Tuple[int,int]
+        self.grid: List[List[State]]
+        self.correct_action_prob: float = correct_action_prob
+        self.incorrect_action_prob: float = incorrect_action_prob
+        self.action_cost: float = action_cost
         self.read(file_name)
 
     def read(self, file_name: str):
@@ -30,13 +94,29 @@ class Environment(object):
             self.obstacles = env_items[:-1]
             self.destination = env_items[-1]
 
-    def zero_init_board(self):
-        self.grid = [ [ 0 for j in range(self.grid_size)] for i in range(self.grid_size) ]
+    def init_board(self):
+        self.grid = [ [ State(c, r, correct_action_prob=self.correct_action_prob, incorrect_action_prob=self.incorrect_action_prob, reward=self.action_cost) 
+                        for r in range(self.grid_size)] for c in range(self.grid_size) ]
 
         for o in self.obstacles:
-            self.grid[o[0]][o[1]] = -100
+            self.grid[o[0]][o[1]].reward += -100
         
-        self.grid[self.destination[0]][self.destination[1]] = 100
+        self.grid[self.destination[0]][self.destination[1]].reward += 100
+
+    # return a iterator over 2d array grid
+    def __iter__(self):
+        def generator():
+            for r in self.grid:
+                for c in r:
+                    yield c
+            self.reset()
+        return generator()
+
+    def reset(self):
+        # move value to prev value
+        for r in self.grid:
+            for c in r:
+                c.reset()
     
     # its okay to cast and print because uncommon operation used for debugging
     def __str__(self) -> str:
@@ -57,19 +137,30 @@ class ValueIterationPolicy(object):
         DESTINATION = "."
 
 
-    def __init__(self, environment: Environment, gamma: float=.9, iterations: int=10):
+    def __init__(self, environment: Environment, gamma: float=.9, epsilon: float=.1, max_iterations: int=100):
         self.environment: Environment = environment
         self.environment.zero_init_board()
         self.grid: List[List[str]] = []
         self.gamma: float = gamma
-        self.iterations: int = iterations
+        self.epsilon: float = epsilon
+        self.max_iterations: int = max_iterations
 
-    def solve(self):
-        # for all states
-        for i in range(self.iterations):
-            pass
+    def value_iterate(self):
+        for i in range(self.max_iterations):
+            # for all states
+            # can modify s & a because return object s "pointer" MAYBE TODO
+            for state in self.environment:
+                # for all actions
+                q_values = []
+                for action in state:
+                    # sum of all [ probability of action * (reward + prev_v) ]
+                    q = sum([ prob * (reward + self.gamma * future_reward) for prob, reward, future_reward in action])
+                    q_values.append(q)
+                # update
+                s.value = max(q_values)
 
-
+    def policy_extract(self):
+        pass
 
     def write(self, file_name: str):
         t_grid = np.array(self.grid).T.tolist()
@@ -88,7 +179,7 @@ class ValueIterationPolicy(object):
 
 def main():
     environment = Environment("input.txt")
-    environment.zero_init_board()
+    environment.init_board()
 
     policy = ValueIterationPolicy(environment)
     policy.solve()
