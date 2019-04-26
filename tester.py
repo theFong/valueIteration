@@ -4,7 +4,11 @@ from shutil import copyfile
 
 @pytest.mark.parametrize("input_file_num,output_file_num", [
     (0,0),
-    (1,1)
+    (1,1),
+    (2,2),
+    (3,3),
+    (4,4),
+    (5,5)
 ])
 def test_files(input_file_num, output_file_num):
     input_file_name = "dev_cases/input-{}.txt".format(input_file_num)
