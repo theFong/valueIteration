@@ -1,22 +1,18 @@
-#!/usr/bin/python3
-from typing import (Dict, 
-List, 
-Tuple)
 import numpy as np
 from enum import Enum
 from itertools import chain
-DEBUG = False
+DEBUG = True
 
 class State(object):
 
     def __init__(self, col, row, grid, actions,
-                reward: float=0., 
-                correct_action_prob: float=.7, 
-                incorrect_action_prob: float=.1):
-        self.reward: float = reward
-        self.prev_value: float = 0 
-        self.value: int = 0
-        self.actions: List[Tuple[str, np.array, str]] = actions
+                reward=0., 
+                correct_action_prob=.7, 
+                incorrect_action_prob=.1):
+        self.reward = reward
+        self.prev_value = 0 
+        self.value = 0
+        self.actions = actions
         self.pos = np.array([col, row])
         self.grid = grid
         self.correct_action_prob = correct_action_prob
@@ -29,7 +25,7 @@ class State(object):
 
         return generator()
 
-    def move(self, action: Tuple[str, np.array, str]):
+    def move(self, action):
         # returns move with each (transition prob, reward, future value)
         params = []
         for a in self.actions:
@@ -40,7 +36,7 @@ class State(object):
             params.append((prob, state_prime.reward, state_prime, a[2]))
         return params
             
-    def move_state(self, action: Tuple[str, np.array, str]):
+    def move_state(self, action):
         new_pos = self.pos + action[1]
         # print(self.pos, new_pos)
 
@@ -69,32 +65,32 @@ class Environment(object):
         OBSTACLE = "o"
         DESTINATION = "."
 
-    def __init__(self, file_name: str, 
-                correct_action_prob: float=.7, 
-                incorrect_action_prob: float=.1, 
-                action_cost: float=-1.,
+    def __init__(self, file_name, 
+                correct_action_prob=.7, 
+                incorrect_action_prob=.1, 
+                action_cost=-1.,
                 actions=[("east", np.array([1,0]), ">"), ("west", np.array([-1,0]), "<"), ("north",np.array([0,-1]), "^"), ("south",np.array([0,1]), "v") ]):
         # will be overwritten
-        self.grid_size: int
-        self.num_obstacles: int
-        self.obstacles: List[Tuple[int,int]]
-        self.destination: Tuple[int,int]
-        self.grid: List[List[State]]
-        self.correct_action_prob: float = correct_action_prob
-        self.incorrect_action_prob: float = incorrect_action_prob
-        self.action_cost: float = action_cost
+        self.grid_size = 0
+        self.num_obstacles = 0
+        self.obstacles = [(0,0)]
+        self.destination = (0,0)
+        self.grid = [[]]
+        self.correct_action_prob = correct_action_prob
+        self.incorrect_action_prob = incorrect_action_prob
+        self.action_cost = action_cost
         self.actions = actions
         self.read(file_name)
 
-    def read(self, file_name: str):
+    def read(self, file_name):
         with open(file_name, "r") as f:
             self.grid_size = int(next(f))
             self.num_obstacles = int(next(f))
 
-            env_items: List[Tuple[int,int]] = []
+            env_items= []
             for i in f:
-                row: List[str] = i.split(",")
-                coord: Tuple[int,int] = (int(row[0]), int(row[1]))
+                row= i.split(",")
+                coord = (int(row[0]), int(row[1]))
                 env_items.append(coord)
 
             self.obstacles = env_items[:-1]
@@ -114,7 +110,7 @@ class Environment(object):
         if DEBUG:
             self.print_reward()
 
-    def average_change(self) -> float:
+    def average_change(self):
         all_delta = [ s.delta() for s in chain.from_iterable(self.grid) ]
         sum_delta = sum(all_delta)
         avg = sum_delta / (self.grid_size **2)
@@ -139,10 +135,10 @@ class Environment(object):
     def print_reward(self):
         strung = [ [r.reward for r in c] for c in self.grid]
         np_array = np.array(strung).T
-        return print(np_array)
+        print(np_array)
     
     # its okay to cast and print because uncommon operation used for debugging
-    def __str__(self) -> str:
+    def __str__(self):
         # for pretty printing
         # coord tuples are (col, row) so take transpose
         strung = [ [r.value for r in c] for c in self.grid]
@@ -153,13 +149,13 @@ class Environment(object):
 
 class ValueIterationPolicy(object):
 
-    def __init__(self, environment: Environment, gamma: float=.9, epsilon: float=.1, max_iterations: int=100):
-        self.environment: Environment = environment
+    def __init__(self, environment, gamma=.9, epsilon=.1, max_iterations=100):
+        self.environment = environment
         self.environment.init_board()
-        self.grid: List[List[str]] = [ [ "" for _ in range(self.environment.grid_size)] for _ in range(self.environment.grid_size)]
-        self.gamma: float = gamma
-        self.epsilon: float = epsilon
-        self.max_iterations: int = max_iterations
+        self.grid = [ [ "" for _ in range(self.environment.grid_size)] for _ in range(self.environment.grid_size)]
+        self.gamma= gamma
+        self.epsilon = epsilon
+        self.max_iterations = max_iterations
 
     def value_iterate(self):
         for i in range(self.max_iterations):
@@ -199,7 +195,7 @@ class ValueIterationPolicy(object):
         if DEBUG:
             print(self)
 
-    def write(self, file_name: str):
+    def write(self, file_name):
         t_grid = np.array(self.grid).T.tolist()
         out_array = [ "".join(r) for r in t_grid ]
         out_str = "\n".join(out_array) + "\n"
@@ -208,7 +204,7 @@ class ValueIterationPolicy(object):
             f.write(out_str)
             
     # its okay to cast and print because uncommon operation used for debugging
-    def __str__(self) -> str:
+    def __str__(self):
         # for pretty printing
         # coord tuples are (col, row) so take transpose
         np_array = np.array(self.grid)
