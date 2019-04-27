@@ -1,7 +1,7 @@
 import numpy as np
 from enum import Enum
 from itertools import chain
-DEBUG = True
+DEBUG = False
 
 class State(object):
 
@@ -10,7 +10,7 @@ class State(object):
                 correct_action_prob=.7, 
                 incorrect_action_prob=.1):
         self.reward = reward
-        self.prev_value = 0 
+        self.prev_value = reward
         self.value = 0
         self.actions = actions
         self.pos = np.array([col, row])
@@ -25,6 +25,9 @@ class State(object):
 
         return generator()
 
+    def next(self):
+        return next(iter(self))
+
     def move(self, action):
         # returns move with each (transition prob, reward, future value)
         params = []
@@ -33,8 +36,9 @@ class State(object):
             if a[0] == action[0]:
                 prob = .7
             state_prime = self.move_state(a)
-            params.append((prob, state_prime.reward, state_prime, a[2]))
-        return params
+            params.append((prob, state_prime.reward, state_prime, a))
+            # print((prob, state_prime.reward, state_prime.value, state_prime.prev_value, a[2]))
+        return params, self.move_state(action)
             
     def move_state(self, action):
         new_pos = self.pos + action[1]
@@ -105,10 +109,13 @@ class Environment(object):
 
         for o in self.obstacles:
             self.grid[o[0]][o[1]].reward += -100
+            self.grid[o[0]][o[1]].prev_value += -100
         
         self.grid[self.destination[0]][self.destination[1]].reward += 100
+        self.grid[self.destination[0]][self.destination[1]].prev_value += 100
         if DEBUG:
-            self.print_reward()
+            self.print_prev_value()
+            # self.print_reward()
 
     def average_change(self):
         all_delta = [ s.delta() for s in chain.from_iterable(self.grid) ]
@@ -136,6 +143,14 @@ class Environment(object):
         strung = [ [r.reward for r in c] for c in self.grid]
         np_array = np.array(strung).T
         print(np_array)
+
+    def print_prev_value(self):
+        # for pretty printing
+        # coord tuples are (col, row) so take transpose
+        strung = [ [r.prev_value for r in c] for c in self.grid]
+        np_array = np.array(strung).T
+
+        print(np_array)
     
     # its okay to cast and print because uncommon operation used for debugging
     def __str__(self):
@@ -160,16 +175,19 @@ class ValueIterationPolicy(object):
     def value_iterate(self):
         for i in range(self.max_iterations):
             # for all states
-            # can modify s & a because return object s "pointer" MAYBE TODO
             for state in self.environment:
                 # for all actions
                 q_values = []
-                for action in state:
-                    # sum of all [ probability of action * (reward + prev_v) ]
-                    q = sum([ prob * (reward + self.gamma * state_prime.prev_value) for prob, reward, state_prime, _ in action])
-                    q_values.append(q)
-                # update
-                state.value = max(q_values)
+                if not (state.pos[0] == self.environment.destination[0] and state.pos[1] == self.environment.destination[1]):
+                    for action, new_state in state:
+                        # sum of all [ probability of action * (reward + prev_v) ]
+                        q = sum([ prob * (self.gamma * state_prime.prev_value) for prob, _, state_prime, _ in action])
+                        # print(q)
+                        q_values.append(q)
+                    # update
+                    state.value = state.reward + max(q_values)
+                else:
+                    state.value = state.prev_value
             # print(self.environment)
             if self.environment.average_change() <= self.epsilon:
                 print("Converged early in {} iterations".format(i))
@@ -181,11 +199,10 @@ class ValueIterationPolicy(object):
 
     def policy_extract(self):
         for state in self.environment:
-            for actions in state:
-                to_max = [ (state_prime.value, symbol) for _, _, state_prime, symbol in actions if state != state_prime]
-                max_opt = max(to_max, key= lambda a: a[0])
-                self.grid[state.pos[0]][state.pos[1]] = max_opt[1]
-                break
+            actions, _ = next(state)
+            to_max = [ (state_prime.value, action[2]) for _, _, state_prime, action in actions if state != state_prime]
+            max_opt = max(to_max, key= lambda a: a[0])
+            self.grid[state.pos[0]][state.pos[1]] = max_opt[1]
 
         for obs in self.environment.obstacles:
             self.grid[obs[0]][obs[1]] = self.environment.Symbol.OBSTACLE.value
@@ -216,6 +233,7 @@ def main():
     vip = ValueIterationPolicy(environment, max_iterations=100)
     vip.value_iterate()
     vip.policy_extract()
+    
     vip.write("output.txt")
 
 if __name__ == "__main__":
